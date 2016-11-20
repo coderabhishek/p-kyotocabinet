@@ -115,6 +115,17 @@ void mapfree(void* ptr) {
 #endif
 }
 
+unsigned int hash_util(std::string str)
+{
+  unsigned int hash = 0;
+  int i=0;
+  while (str[i]!='\0')
+  {
+      hash = (hash * 101  +  str[i++])%max_size;
+  }
+  return hash%max_size;
+}
+
 
 /**
  * Get the time of day in seconds.

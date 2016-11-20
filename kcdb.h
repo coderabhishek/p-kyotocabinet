@@ -23,11 +23,17 @@
 #include <kccompress.h>
 #include <kccompare.h>
 #include <kcmap.h>
+#include <libpmemobj++/p.hpp>
+#include <libpmemobj++/persistent_ptr.hpp>
+#include <libpmemobj.h>
+
+
 
 #define KCDBSSMAGICDATA  "KCSS\n"        ///< The magic data of the snapshot file
+using namespace nvml::obj;
+using namespace std;
 
 namespace kyotocabinet {                 // common namespace
-
 
 /**
  * Interface of database abstraction.
@@ -1330,9 +1336,29 @@ class BasicDB : public DB {
    * Set the value of a record.
    * @note Equal to the original DB::set method except that the parameters are std::string.
    */
+   struct record {
+    char pkey[max_key_size], pvalue[max_value_size];
+   };
+
+   struct root{
+    record block[max_size];
+   };
   bool set(const std::string& key, const std::string& value) {
     _assert_(true);
-    return set(key.c_str(), key.size(), value.c_str(), value.size());
+    std::cout<<"key-> "<<key<<"   "<<value<<std::endl;
+    PMEMobjpool *pop = pmemobj_create("data", "layout", PMEMOBJ_MIN_POOL, 0666);
+    if(pop==NULL)
+      pop = pmemobj_open("data", "layout");
+    else std::cout<<"Pool created!!"<<endl;
+
+    PMEMoid rootp = pmemobj_root(pop, sizeof (root));
+    std::cout<<"writing to -->"<<hash_util(key)<<endl;
+    root *data = (root *)pmemobj_direct(rootp);
+    pmemobj_memcpy_persist(pop, data->block[hash_util(key)].pkey, key.c_str(), max_key_size);
+    pmemobj_memcpy_persist(pop, data->block[hash_util(key)].pvalue, value.c_str(), max_value_size);
+       
+    pmemobj_close(pop);
+    return true;//set(key.c_str(), key.size(), value.c_str(), value.size());
   }
   /**
    * Add a record.
@@ -1806,13 +1832,28 @@ class BasicDB : public DB {
    * bool for success.
    */
   bool get(const std::string& key, std::string* value) {
-    _assert_(value);
-    size_t vsiz;
-    char* vbuf = get(key.c_str(), key.size(), &vsiz);
-    if (!vbuf) return false;
-    value->clear();
-    value->append(vbuf, vsiz);
-    delete[] vbuf;
+    _assert_(true);
+    PMEMobjpool *pop = pmemobj_open("data", "layout");
+    std::cout<<"getting key-> "<<key<<std::endl;
+
+    if(pop==NULL)
+      std::cout<<"Error opening database!!\n";
+
+    PMEMoid rootp = pmemobj_root(pop, sizeof (root));;
+    int hash_value = hash_util(key)%max_size;
+    std::cout<<"Getting from slot->"<<hash_value<<endl;
+
+    root *data = (root *)pmemobj_direct(rootp);
+
+    TX_BEGIN(pop) {
+    std::string* val = new std::string(data->block[hash_util(key)].pvalue);
+    std::cout<<"Got--> "<<*val<<endl;
+    value = val;
+    // persistent_ptr<record> prec = pmemobj_tx_alloc(sizeof (record), 0);
+    } TX_END
+
+    std::cout<<"Received-> "<<key<<"   "<<*value<<endl;
+    pmemobj_close(pop);
     return true;
   }
   /**

@@ -18,8 +18,13 @@
 
 #include <kccommon.h>
 
-namespace kyotocabinet {                 // common namespace
 
+#define max_size 11  //it is a prime number
+#define max_key_size 100
+#define max_value_size 1000
+
+
+namespace kyotocabinet {                 // common namespace
 
 /** The maximum value of int8_t. */
 const int8_t INT8MAX = (std::numeric_limits<int8_t>::max)();
@@ -216,6 +221,9 @@ uint64_t hton64(uint64_t num);
  * @return the converted number in the native order.
  */
 uint16_t ntoh16(uint16_t num);
+
+
+unsigned int hash_util(std::string str);
 
 
 /**
